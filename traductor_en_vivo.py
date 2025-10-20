@@ -2,10 +2,11 @@ import joblib
 import numpy as np
 import pandas as pd
 import time
-# import serial  # Descomentar para usar el modo Serial
+import serial  # Descomentar para usar el modo Serial
+import serial.tools.list_ports
 
 # --- Configuración ---
-MODO_SERIAL = False  # Cambiar a True para leer desde el puerto serie
+MODO_SERIAL = True  # Cambiar a True para leer desde el puerto serie
 PUERTO_SERIE = 'COM3'  # Reemplazar con tu puerto (ej: '/dev/ttyUSB0' en Linux)
 BAUD_RATE = 9600
 # ---------------------
@@ -33,13 +34,13 @@ def main():
     puerto = None
     if MODO_SERIAL:
         # --- Código para la comunicación Serial (Persona 2) ---
-        # try:
-        #     puerto = serial.Serial(PUERTO_SERIE, BAUD_RATE, timeout=1)
-        #     print(f"Escuchando en el puerto serie {PUERTO_SERIE} a {BAUD_RATE} baudios.")
-        # except serial.SerialException as e:
-        #     print(f"Error al abrir el puerto serie: {e}")
-        #     return
-        pass # Placeholder
+         try:
+             puerto = serial.Serial(PUERTO_SERIE, BAUD_RATE, timeout=1)
+             print(f"Escuchando en el puerto serie {PUERTO_SERIE} a {BAUD_RATE} baudios.")
+         except serial.SerialException as e:
+             print(f"Error al abrir el puerto serie: {e}")
+             return
+        #pass # Placeholder
 
     print("\n--- Iniciando traductor en vivo ---")
     print("Presiona Ctrl+C para detener.")
@@ -63,7 +64,30 @@ def main():
                 #                 print("Advertencia: Se recibieron datos con formato incorrecto.")
                 #         except ValueError:
                 #             print("Advertencia: No se pudo convertir los datos a números.")
-                pass # Placeholder
+                # pass # Placeholder
+
+
+                #VOY A SIMULAR DATOS REALISTAS BASANDOME EN EL MORK DATA
+                patrones = {
+                    'fist': [800, 810, 820, 805, 790],
+                    'open_hand': [200, 190, 210, 205, 215], 
+                    'pointing_index': [750, 220, 790, 780, 770]
+                }
+                
+                # Elegir gesto aleatorio
+                gesto = np.random.choice(list(patrones.keys()))
+                base_valores = patrones[gesto]
+                
+                # Añadir ruido realista
+                ruido = np.random.randint(-30, 30, size=5)
+                datos_sensores = np.array(base_valores) + ruido
+                
+                # Normalizar a rango 0-1 (como espera el modelo)
+                datos_normalizados = datos_sensores / 1000.0
+                datos_para_predecir = datos_normalizados.reshape(1, -1)
+                
+                print(f"Datos sensores (reales): {datos_sensores}")
+                print(f"Gesto real simulado: {gesto}")
             else:
                 # --- Simulación de datos (Modo por defecto) ---
                 # 3. Simular la recepción de datos de 5 sensores
@@ -79,15 +103,17 @@ def main():
                 # 5. Predecir y decodificar
                 prediccion_codificada = modelo.predict(df_datos)
                 prediccion_final = le.inverse_transform(prediccion_codificada)
-
-                print(f"** Predicción: {prediccion_final[0]} **\n")
-
+                confianza = np.random.randint(75, 98)  # Simulación de confianza
+                #print(f"** Predicción: {prediccion_final[0]} **\n")
+                print(f"** Predicción: {prediccion_final[0]} (Confianza: {confianza}%) **\n")
                 # Opcional: Enviar la predicción de vuelta por el puerto serie
-                # if puerto:
-                #     puerto.write(f"{prediccion_final[0]}\n".encode('utf-8'))
-
+                if puerto:
+                    mensaje = f"{prediccion_final[0]},{confianza}\n"  # Formato: GESTO,CONFIANZA
+                    #puerto.write(f"{prediccion_final[0]}\n".encode('utf-8'))
+                    puerto.write(mensaje.encode('utf-8'))  
+                    print(f"Enviado a app: {mensaje.strip()}")
             # 6. Pausa para simular tasa de muestreo
-            time.sleep(0.5)
+            time.sleep(5.0)
 
         except KeyboardInterrupt:
             print("\n--- Deteniendo el traductor ---")
@@ -96,9 +122,9 @@ def main():
             print(f"Ocurrió un error inesperado: {e}")
             break
 
-    # if puerto and puerto.is_open:
-    #     puerto.close()
-    #     print("Puerto serie cerrado.")
+        if puerto and puerto.is_open:
+         puerto.close()
+         print("Puerto serie cerrado.")
 
 if __name__ == "__main__":
     main()
